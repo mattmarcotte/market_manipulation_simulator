@@ -7,9 +7,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "market:produce": "npx tsx scripts/market-producer.ts"
+    "market:produce": "npx tsx scripts/market-producer.ts",
+    "service:account": "npx tsx services/account-service/index.ts",
+    "service:order": "npx tsx services/order-service/index.ts",
+    "services": "npx concurrently \"npm run service:account\" \"npm run service:order\"",
+    "dev:all": "bash scripts/dev.sh"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.4",
+    "@grpc/proto-loader": "^0.8.1",
     "kafkajs": "^2.2.4",
     "lightweight-charts": "^5.2.0",
     "next": "16.2.9",
@@ -23,9 +29,11 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
+    "concurrently": "^10.0.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
+    "tsx": "^4.22.4",
     "typescript": "^5"
   }
 }

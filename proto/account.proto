@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package account;
+
+service AccountService {
+  // Check if the account has sufficient cash for a buy
+  rpc CheckBalance (CheckBalanceRequest) returns (CheckBalanceResponse);
+
+  // Check if the account holds enough shares for a sell
+  rpc CheckPosition (CheckPositionRequest) returns (CheckPositionResponse);
+
+  // Get full portfolio snapshot
+  rpc GetPortfolio (GetPortfolioRequest) returns (GetPortfolioResponse);
+
+  // Apply an order fill (deduct/add cash and shares)
+  rpc ApplyFill (ApplyFillRequest) returns (ApplyFillResponse);
+}
+
+message CheckBalanceRequest {
+  string account_id = 1;
+  double amount = 2;
+}
+
+message CheckBalanceResponse {
+  bool sufficient = 1;
+  double available_cash = 2;
+}
+
+message CheckPositionRequest {
+  string account_id = 1;
+  string symbol = 2;
+  int32 shares = 3;
+}
+
+message CheckPositionResponse {
+  bool sufficient = 1;
+  int32 held_shares = 2;
+}
+
+message GetPortfolioRequest {
+  string account_id = 1;
+}
+
+message Position {
+  string symbol = 1;
+  int32 shares = 2;
+  double avg_cost = 3;
+  double current_price = 4;
+  double market_value = 5;
+  double pnl = 6;
+}
+
+message Trade {
+  string id = 1;
+  string symbol = 2;
+  string side = 3;
+  int32 shares = 4;
+  double price = 5;
+  int64 timestamp = 6;
+}
+
+message GetPortfolioResponse {
+  double cash = 1;
+  repeated Position positions = 2;
+  double net_worth = 3;
+  repeated Trade recent_trades = 4;
+}
+
+message ApplyFillRequest {
+  string account_id = 1;
+  string order_id = 2;
+  string symbol = 3;
+  string side = 4;
+  int32 shares = 5;
+  double fill_price = 6;
+  int64 timestamp = 7;
+}
+
+message ApplyFillResponse {
+  bool success = 1;
+  double cash = 2;
+}

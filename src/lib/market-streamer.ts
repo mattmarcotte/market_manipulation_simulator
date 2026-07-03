@@ -40,7 +40,7 @@ export interface MarketIndex {
 
 type Listener = (ticks: PriceTick[]) => void;
 
-const TICK_INTERVAL_MS = 5000; // 5 seconds = 1 simulated trading day
+const TICK_INTERVAL_MS = 2500; // 2.5 seconds = 1 simulated trading day
 const MAX_CANDLES = 300;
 const MAX_INDEX_HISTORY = 400;
 
@@ -219,11 +219,17 @@ class MarketStreamer {
   }
 }
 
-let instance: MarketStreamer | null = null;
+// Hoist onto globalThis so all route bundles and HMR reloads share one
+// streamer (and thus one candle history / index / tick interval).
+const globalStore = globalThis as unknown as { __marketStreamer?: MarketStreamer };
+
 export function getMarketStreamer(): MarketStreamer {
-  if (!instance) {
-    instance = new MarketStreamer();
-    instance.start();
+  if (!globalStore.__marketStreamer) {
+    globalStore.__marketStreamer = new MarketStreamer();
+    globalStore.__marketStreamer.start();
+
+    // Start Kafka adjustment consumer (non-blocking)
+    import("./adjustment-consumer").then((m) => m.startAdjustmentConsumer()).catch(() => {});
   }
-  return instance;
+  return globalStore.__marketStreamer;
 }

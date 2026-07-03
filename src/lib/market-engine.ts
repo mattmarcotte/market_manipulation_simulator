@@ -109,6 +109,15 @@ export class MarketEngine {
     return ticks;
   }
 
+  applyShock(symbol: string, percentChange: number) {
+    const s = this.state.get(symbol);
+    if (!s) return;
+    const newPrice = +(s.price * (1 + percentChange)).toFixed(2);
+    s.price = Math.max(0.01, newPrice);
+    s.high = Math.max(s.high, s.price);
+    s.low = Math.min(s.low, s.price);
+  }
+
   getPrice(symbol: string): number | undefined {
     return this.state.get(symbol)?.price;
   }
@@ -118,8 +127,11 @@ export class MarketEngine {
   }
 }
 
-let instance: MarketEngine | null = null;
+// Hoist the singleton onto globalThis so every route bundle and HMR reload
+// shares one engine instance (module scope is re-instantiated per bundle in Next.js dev).
+const globalStore = globalThis as unknown as { __marketEngine?: MarketEngine };
+
 export function getMarketEngine(): MarketEngine {
-  if (!instance) instance = new MarketEngine();
-  return instance;
+  if (!globalStore.__marketEngine) globalStore.__marketEngine = new MarketEngine();
+  return globalStore.__marketEngine;
 }

@@ -10,10 +10,12 @@
     "market:produce": "npx tsx scripts/market-producer.ts",
     "service:account": "npx tsx services/account-service/index.ts",
     "service:order": "npx tsx services/order-service/index.ts",
-    "services": "npx concurrently \"npm run service:account\" \"npm run service:order\"",
+    "service:sentiment": "npx tsx services/sentiment-service/index.ts",
+    "services": "npx concurrently \"npm run service:account\" \"npm run service:order\" \"npm run service:sentiment\"",
     "dev:all": "bash scripts/dev.sh"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@grpc/grpc-js": "^1.14.4",
     "@grpc/proto-loader": "^0.8.1",
     "kafkajs": "^2.2.4",

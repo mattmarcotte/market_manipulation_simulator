@@ -1,0 +1,45 @@
+import { getMarketEngine } from "./market-engine";
+
+export interface MarketAdjustment {
+  symbol: string;
+  impactPercent: number; // e.g. +5.0 or -3.2
+  reason: string;
+  postId: string;
+  timestamp: number;
+}
+
+type AdjustmentListener = (adjustment: MarketAdjustment) => void;
+
+// Shared across route bundles / HMR reloads via globalThis — the Kafka
+// consumer and the SSE route must see the same listener set.
+const globalStore = globalThis as unknown as {
+  __adjListeners?: Set<AdjustmentListener>;
+  __recentAdjustments?: MarketAdjustment[];
+};
+const listeners = (globalStore.__adjListeners ??= new Set<AdjustmentListener>());
+const recentAdjustments = (globalStore.__recentAdjustments ??= []);
+
+export function applyAdjustment(adjustment: MarketAdjustment) {
+  recentAdjustments.unshift(adjustment);
+  if (recentAdjustments.length > 100) recentAdjustments.pop();
+
+  const engine = getMarketEngine();
+  engine.applyShock(adjustment.symbol, adjustment.impactPercent / 100);
+
+  for (const listener of listeners) {
+    listener(adjustment);
+  }
+
+  console.log(
+    `[Market] ${adjustment.symbol} ${adjustment.impactPercent > 0 ? "+" : ""}${adjustment.impactPercent}% — ${adjustment.reason}`
+  );
+}
+
+export function getRecentAdjustments(limit = 20): MarketAdjustment[] {
+  return recentAdjustments.slice(0, limit);
+}
+
+export function onAdjustment(listener: AdjustmentListener): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}

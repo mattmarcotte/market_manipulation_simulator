@@ -4,11 +4,13 @@ import { useEffect, useState, useCallback } from "react";
 
 interface Position {
   symbol: string;
-  shares: number;
+  shares: number; // negative = short
   avgCost: number;
   currentPrice: number;
   marketValue: number;
   pnl: number;
+  marginDebt: number;
+  leverage: number;
 }
 
 interface PortfolioData {
@@ -23,6 +25,7 @@ interface PortfolioData {
     price: number;
     timestamp: number;
   }[];
+  totalMarginDebt: number;
 }
 
 export default function PortfolioPanel({
@@ -47,12 +50,19 @@ export default function PortfolioPanel({
   }, [fetchPortfolio, refreshKey]);
 
   async function closePosition(symbol: string, shares: number) {
+    // Negative shares = short position; close it by covering (buying back),
+    // not selling.
+    const isShort = shares < 0;
     setClosing(symbol);
     try {
       const res = await fetch("/api/trade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol, side: "sell", shares }),
+        body: JSON.stringify({
+          symbol,
+          side: isShort ? "cover" : "sell",
+          shares: Math.abs(shares),
+        }),
       });
       if (res.ok) {
         onTrade?.();
@@ -81,33 +91,59 @@ export default function PortfolioPanel({
         </div>
       </div>
 
+      {data.totalMarginDebt > 0 && (
+        <div className="bg-orange-900/30 rounded-lg px-3 py-2 flex justify-between items-center">
+          <span className="text-xs text-orange-300">Margin Debt</span>
+          <span className="text-sm font-mono font-bold text-orange-300">
+            -${data.totalMarginDebt.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </span>
+        </div>
+      )}
+
       {data.positions.length > 0 && (
         <div>
           <h3 className="text-xs text-gray-400 uppercase mb-2">Positions</h3>
           <div className="space-y-1">
-            {data.positions.map((pos) => (
-              <div key={pos.symbol} className="bg-gray-800 rounded px-3 py-2 text-sm font-mono">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <span className="text-white font-bold">{pos.symbol}</span>
-                    <span className="text-gray-500 ml-2">{pos.shares} shares</span>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-white">${pos.marketValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                    <div className={pos.pnl >= 0 ? "text-green-400 text-xs" : "text-red-400 text-xs"}>
-                      {pos.pnl >= 0 ? "+" : ""}${pos.pnl.toFixed(2)}
+            {data.positions.map((pos) => {
+              const isShort = pos.shares < 0;
+              return (
+                <div key={pos.symbol} className="bg-gray-800 rounded px-3 py-2 text-sm font-mono">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="text-white font-bold">{pos.symbol}</span>
+                      {isShort && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded ml-1.5 bg-purple-900/50 text-purple-300">
+                          SHORT
+                        </span>
+                      )}
+                      {pos.leverage > 1 && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded ml-1.5 bg-orange-900/50 text-orange-300">
+                          {pos.leverage}x
+                        </span>
+                      )}
+                      <span className="text-gray-500 ml-2">{Math.abs(pos.shares)} shares</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-white">${pos.marketValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                      <div className={pos.pnl >= 0 ? "text-green-400 text-xs" : "text-red-400 text-xs"}>
+                        {pos.pnl >= 0 ? "+" : ""}${pos.pnl.toFixed(2)}
+                      </div>
                     </div>
                   </div>
+                  <button
+                    onClick={() => closePosition(pos.symbol, pos.shares)}
+                    disabled={closing === pos.symbol}
+                    className="mt-1.5 w-full py-1 text-[10px] font-bold uppercase rounded bg-red-900/40 text-red-400 hover:bg-red-800/60 disabled:opacity-50 transition-colors"
+                  >
+                    {closing === pos.symbol
+                      ? "Closing..."
+                      : isShort
+                      ? `Cover ${Math.abs(pos.shares)} @ Market`
+                      : `Close ${pos.shares} @ Market`}
+                  </button>
                 </div>
-                <button
-                  onClick={() => closePosition(pos.symbol, pos.shares)}
-                  disabled={closing === pos.symbol}
-                  className="mt-1.5 w-full py-1 text-[10px] font-bold uppercase rounded bg-red-900/40 text-red-400 hover:bg-red-800/60 disabled:opacity-50 transition-colors"
-                >
-                  {closing === pos.symbol ? "Closing..." : `Close ${pos.shares} @ Market`}
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

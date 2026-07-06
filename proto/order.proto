@@ -13,8 +13,9 @@ service OrderService {
 message PlaceOrderRequest {
   string account_id = 1;
   string symbol = 2;
-  string side = 3; // "buy" or "sell"
+  string side = 3; // "buy", "sell", "short", or "cover"
   int32 shares = 4;
+  double leverage = 5; // 1-5x, only meaningful for "buy" and "short"; treat 0 as 1
 }
 
 message PlaceOrderResponse {

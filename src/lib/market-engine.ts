@@ -60,53 +60,86 @@ export class MarketEngine {
     // correlate market-wide sentiment
     const marketShock = gaussianRandom() * 0.3;
 
+    // Pass 1: independently-simulated assets (stocks, commodities, crypto) via GBM.
     for (const [symbol, s] of this.state) {
+      if (s.config.assetType === "etf") continue; // ETFs are derived in pass 2
+
       const { volatility, drift, beta } = s.config;
 
-      // individual stock move = drift + beta * market factor + idiosyncratic
       const idiosyncratic = gaussianRandom();
       const dW = (beta * marketShock + idiosyncratic * Math.sqrt(1 - beta * beta * 0.09)) * Math.sqrt(dt);
       const dS = drift * dt + volatility * dW;
       const newPrice = +(s.price * (1 + dS)).toFixed(2);
-      const clampedPrice = Math.max(0.01, newPrice);
 
-      // simulate intraday high/low around the close
-      const dayRange = Math.abs(dS) + volatility * Math.sqrt(dt) * 0.5 * Math.random();
-      const dayHigh = +(Math.max(s.price, clampedPrice) * (1 + dayRange * Math.random() * 0.5)).toFixed(2);
-      const dayLow = +(Math.min(s.price, clampedPrice) * (1 - dayRange * Math.random() * 0.5)).toFixed(2);
+      ticks.push(this.finalizeTick(symbol, s, newPrice, dS, dt));
+    }
 
-      const dailyVolume = Math.floor(
-        (s.config.sharesOutstanding * 1_000_000 * (0.005 + Math.random() * 0.015))
-      );
+    // Pass 2: ETFs — price derived from the weighted daily return of their holdings,
+    // scaled by leverage. Computed after pass 1 so underlying prevClose/price are both current.
+    for (const [symbol, s] of this.state) {
+      if (s.config.assetType !== "etf") continue;
 
-      const spread = +(clampedPrice * 0.0008).toFixed(2) || 0.01;
+      const leverage = s.config.leverage ?? 1;
+      const holdings = s.config.holdings ?? [];
 
-      const tick: PriceTick = {
-        symbol,
-        price: clampedPrice,
-        change: +(clampedPrice - s.prevClose).toFixed(2),
-        changePercent: +(((clampedPrice - s.prevClose) / s.prevClose) * 100).toFixed(2),
-        volume: dailyVolume,
-        bid: +(clampedPrice - spread).toFixed(2),
-        ask: +(clampedPrice + spread).toFixed(2),
-        high: dayHigh,
-        low: Math.max(0.01, dayLow),
-        open: +(s.price * (1 + (Math.random() - 0.5) * volatility * Math.sqrt(dt) * 0.3)).toFixed(2),
-        timestamp: Date.now(),
-        dayNumber: this.dayNumber,
-      };
+      let weightedReturn = 0;
+      let totalWeight = 0;
+      for (const h of holdings) {
+        const underlying = this.state.get(h.symbol);
+        if (!underlying || underlying.prevClose <= 0) continue;
+        const dailyReturn = underlying.price / underlying.prevClose - 1;
+        weightedReturn += h.weight * dailyReturn;
+        totalWeight += h.weight;
+      }
+      if (totalWeight > 0) weightedReturn /= totalWeight;
 
-      s.prevClose = s.price;
-      s.price = clampedPrice;
-      s.open = tick.open;
-      s.high = dayHigh;
-      s.low = Math.max(0.01, dayLow);
-      s.volume = dailyVolume;
+      const dS = leverage * weightedReturn;
+      const newPrice = +(s.price * (1 + dS)).toFixed(2);
 
-      ticks.push(tick);
+      ticks.push(this.finalizeTick(symbol, s, newPrice, dS, dt));
     }
 
     return ticks;
+  }
+
+  private finalizeTick(symbol: string, s: TickerState, rawNewPrice: number, dS: number, dt: number): PriceTick {
+    const clampedPrice = Math.max(0.01, rawNewPrice);
+
+    // simulate intraday high/low around the close
+    const dayRange = Math.abs(dS) + s.config.volatility * Math.sqrt(dt) * 0.5 * Math.random();
+    const dayHigh = +(Math.max(s.price, clampedPrice) * (1 + dayRange * Math.random() * 0.5)).toFixed(2);
+    const dayLow = +(Math.min(s.price, clampedPrice) * (1 - dayRange * Math.random() * 0.5)).toFixed(2);
+
+    const dailyVolume =
+      s.config.assetType === "commodity" || s.config.assetType === "crypto" || s.config.assetType === "etf"
+        ? Math.floor(1_000_000 + Math.random() * 20_000_000)
+        : Math.floor(s.config.sharesOutstanding * 1_000_000 * (0.005 + Math.random() * 0.015));
+
+    const spread = +(clampedPrice * 0.0008).toFixed(2) || 0.01;
+
+    const tick: PriceTick = {
+      symbol,
+      price: clampedPrice,
+      change: +(clampedPrice - s.prevClose).toFixed(2),
+      changePercent: +(((clampedPrice - s.prevClose) / s.prevClose) * 100).toFixed(2),
+      volume: dailyVolume,
+      bid: +(clampedPrice - spread).toFixed(2),
+      ask: +(clampedPrice + spread).toFixed(2),
+      high: dayHigh,
+      low: Math.max(0.01, dayLow),
+      open: +(s.price * (1 + (Math.random() - 0.5) * s.config.volatility * Math.sqrt(dt) * 0.3)).toFixed(2),
+      timestamp: Date.now(),
+      dayNumber: this.dayNumber,
+    };
+
+    s.prevClose = s.price;
+    s.price = clampedPrice;
+    s.open = tick.open;
+    s.high = dayHigh;
+    s.low = Math.max(0.01, dayLow);
+    s.volume = dailyVolume;
+
+    return tick;
   }
 
   applyShock(symbol: string, percentChange: number) {

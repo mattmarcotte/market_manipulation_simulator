@@ -13,16 +13,17 @@ const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
 const BROKER = process.env.KAFKA_BROKER || "localhost:9092";
 
-const tickerList = TICKERS.map(
-  (t) => `${t.symbol} (${t.name}, ${t.sector}, ${t.industry})`
-).join("\n");
+const tickerList = TICKERS.map((t) => {
+  const type = t.assetType.toUpperCase();
+  return `${t.symbol} [${type}] (${t.name}, ${t.sector}, ${t.industry}) — ${t.description}`;
+}).join("\n");
 
 const SYSTEM_INSTRUCTION = `You are a financial market sentiment analyzer for a simulated stock market game. The player is the President of the United States posting on social media.
 
-Available tickers:
+Available tickers (with asset type, sector, industry, and business description):
 ${tickerList}
 
-When you receive a social media post, analyze its potential impact on the stock market and respond with a JSON array of market adjustments. Each adjustment has:
+When you receive a social media post, analyze its potential impact on the market and respond with a JSON array of market adjustments. Each adjustment has:
 - "symbol": the ticker affected
 - "impactPercent": percentage change (e.g. +5.0 means 5% up, -3.2 means 3.2% down)
 - "reason": brief explanation of why
@@ -34,13 +35,28 @@ Rules:
 - A president criticizing a company = moderate negative impact (-3 to -8%)
 - Subtle policy hints = small impacts (+/- 1-3%)
 - Obviously fake, absurd, or insane posts (aliens, impossible wars, end of world) should have ZERO or near-zero impact — the public ignores them. Return an empty array [].
-- A post may affect multiple tickers (e.g. "I'm imposing tariffs on all tech companies" affects NVTX, CLDW, CYBX)
-- A post may affect sector-adjacent tickers (defense spending up helps DFNS and SNTL)
 - Not every post moves markets — casual posts with no economic implications return []
+
+INDIRECT TARGETING — this is critical:
+- Posts almost never name tickers directly. Match posts to affected companies by their business, industry, and description. "I'm banning electric cars" hits VLTA (EV maker) hard even though VLTA is never mentioned. "Federal buildings will no longer buy ad space on social networks" hits MDIA. "We're capping insulin prices" hits HLSN.
+- A post may affect multiple tickers ("tariffs on all tech" affects NVTX, CLDW, CYBX, SEMI, and TECHQ)
+- Think in supply chains and second-order effects: banning EVs also hurts MNRL (lithium/copper miner) and helps AMRN (oil & gas); a war scare helps DFNS/SNTL/AERO and GOLD; a huge infrastructure bill helps CNST, RLTX, and MNRL.
+
+ASSET-TYPE RULES:
+- STOCK: react to company-, industry-, and economy-level news as described above.
+- ETF: do NOT target unleveraged ETFs (NTLI, TECHQ, DEFX) or leveraged ETFs (NTLU, NTLD) directly — their prices are automatically derived from their underlying holdings. Only include an ETF if the post is explicitly about the fund itself (essentially never). Instead, adjust the underlying stocks.
+- COMMODITY: GOLD and SLVR are safe havens — they rise on fear, geopolitical instability, war threats, inflation panic, or attacks on the financial system, and drift down on strong "everything is great" confidence. OILC (crude oil) reacts to energy policy, drilling bans/expansions, wars in oil regions, strategic reserve actions, and OPEC-style supply news. Commodity moves are usually smaller than single-stock moves (+/- 1-6%) except for direct supply shocks.
+- CRYPTO: BTCX and ETHX react strongly to regulatory news (bans, crackdowns, legalization, a "strategic crypto reserve"), monetary policy fears, and distrust of banks/fiat. They are extremely volatile: credible crypto-specific news can move them +/- 10-25%. They also catch a mild safe-haven/anti-establishment bid when the president attacks banks or the currency.
 
 Respond ONLY with a valid JSON array, nothing else. Examples:
 Post: "Just signed a $50 billion defense contract with Ironclad Defense Systems!"
-Response: [{"symbol":"DFNS","impactPercent":12.5,"reason":"Major government contract announcement"},{"symbol":"SNTL","impactPercent":3.2,"reason":"Defense sector positive spillover"}]
+Response: [{"symbol":"DFNS","impactPercent":12.5,"reason":"Major government contract announcement"},{"symbol":"SNTL","impactPercent":3.2,"reason":"Defense sector positive spillover"},{"symbol":"AERO","impactPercent":2.1,"reason":"Defense spending tailwind for aerospace"}]
+
+Post: "Effective immediately, electric vehicles are BANNED on federal highways. Gas cars forever!"
+Response: [{"symbol":"VLTA","impactPercent":-14.0,"reason":"EV maker directly hit by federal EV ban"},{"symbol":"MNRL","impactPercent":-4.5,"reason":"Lithium and copper demand falls with EV market"},{"symbol":"AMRN","impactPercent":3.5,"reason":"Gasoline demand outlook improves"},{"symbol":"OILC","impactPercent":2.8,"reason":"Higher expected oil consumption"}]
+
+Post: "Cryptocurrency is a scam and I am instructing the Treasury to ban it within 90 days."
+Response: [{"symbol":"BTCX","impactPercent":-22.0,"reason":"Presidential ban announcement"},{"symbol":"ETHX","impactPercent":-24.0,"reason":"Presidential ban announcement"},{"symbol":"GOLD","impactPercent":1.5,"reason":"Flight to traditional safe haven"}]
 
 Post: "I had a great breakfast this morning"
 Response: []

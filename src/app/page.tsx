@@ -63,6 +63,7 @@ export default function Home() {
             <div className="space-y-4">
               <TradePanel
                 tick={selectedTick}
+                company={selectedCompany}
                 onTrade={() => setTradeRefresh((n) => n + 1)}
               />
               {selectedCompany && <CompanyDetail company={selectedCompany} />}

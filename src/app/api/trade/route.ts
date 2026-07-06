@@ -3,11 +3,20 @@ import { placeOrder } from "@/lib/grpc-clients";
 
 const ACCOUNT_ID = "player-1";
 
+const VALID_SIDES = ["buy", "sell", "short", "cover"];
+
 export async function POST(req: NextRequest) {
-  const { symbol, side, shares } = await req.json();
+  const { symbol, side, shares, leverage } = await req.json();
 
   if (!symbol || !side || !shares) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+  }
+  if (!VALID_SIDES.includes(side)) {
+    return NextResponse.json({ error: "Side must be 'buy', 'sell', 'short', or 'cover'" }, { status: 400 });
+  }
+  const lev = Math.min(5, Math.max(1, Number(leverage) || 1));
+  if ((side === "sell" || side === "cover") && lev !== 1) {
+    return NextResponse.json({ error: "Leverage only applies to 'buy' and 'short' orders" }, { status: 400 });
   }
 
   try {
@@ -16,6 +25,7 @@ export async function POST(req: NextRequest) {
       symbol,
       side,
       shares: Number(shares),
+      leverage: lev,
     });
 
     if (!result.success) {
@@ -28,6 +38,7 @@ export async function POST(req: NextRequest) {
         symbol,
         side,
         shares: Number(shares),
+        leverage: lev,
         price: result.fillPrice,
         status: result.status,
         timestamp: Date.now(),

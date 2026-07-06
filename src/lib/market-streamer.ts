@@ -1,5 +1,5 @@
 import { getMarketEngine, PriceTick } from "./market-engine";
-import { TICKERS, TickerConfig } from "./tickers";
+import { AssetType, TICKERS, TickerConfig, TickerHolding } from "./tickers";
 
 export interface Candle {
   time: number;
@@ -28,6 +28,9 @@ export interface CompanyStats {
   week52High: number;
   week52Low: number;
   avgVolume: number;
+  assetType: AssetType;
+  leverage?: number;
+  holdings?: TickerHolding[];
 }
 
 export interface MarketIndex {
@@ -193,6 +196,9 @@ class MarketStreamer {
         week52High: Math.max(...prices),
         week52Low: Math.min(...prices),
         avgVolume: Math.round(volumes.reduce((a, b) => a + b, 0) / volumes.length),
+        assetType: config.assetType,
+        leverage: config.leverage,
+        holdings: config.holdings,
       };
     });
   }

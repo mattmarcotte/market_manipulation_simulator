@@ -35,6 +35,7 @@ export function placeOrder(request: {
   symbol: string;
   side: string;
   shares: number;
+  leverage?: number;
 }): Promise<{
   success: boolean;
   orderId: string;
@@ -43,10 +44,13 @@ export function placeOrder(request: {
   status: string;
 }> {
   return new Promise((resolve, reject) => {
-    getOrderClient().placeOrder(request, (err: any, res: any) => {
-      if (err) reject(err);
-      else resolve(res);
-    });
+    getOrderClient().placeOrder(
+      { ...request, leverage: request.leverage || 1 },
+      (err: any, res: any) => {
+        if (err) reject(err);
+        else resolve(res);
+      }
+    );
   });
 }
 
@@ -96,6 +100,8 @@ export function getPortfolio(accountId: string): Promise<{
     currentPrice: number;
     marketValue: number;
     pnl: number;
+    marginDebt: number;
+    leverage: number;
   }>;
   netWorth: number;
   recentTrades: Array<{
@@ -106,6 +112,7 @@ export function getPortfolio(accountId: string): Promise<{
     price: number;
     timestamp: number;
   }>;
+  totalMarginDebt: number;
 }> {
   return new Promise((resolve, reject) => {
     getAccountClient().getPortfolio({ accountId }, (err: any, res: any) => {

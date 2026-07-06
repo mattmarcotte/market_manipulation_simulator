@@ -48,6 +48,7 @@ function applyFill(event: {
   shares: number;
   fillPrice: number;
   timestamp: number;
+  leverage: number;
 }): Promise<{ success: boolean; cash: number }> {
   return new Promise((resolve, reject) => {
     accountClient.applyFill({
@@ -58,6 +59,7 @@ function applyFill(event: {
       shares: event.shares,
       fillPrice: event.fillPrice,
       timestamp: event.timestamp,
+      leverage: event.leverage,
     }, (err: any, res: any) => {
       if (err) reject(err);
       else resolve(res);
@@ -105,6 +107,7 @@ async function publishOrderFilled(event: {
   shares: number;
   fillPrice: number;
   timestamp: number;
+  leverage: number;
 }): Promise<void> {
   // Always apply via direct gRPC call for immediate consistency
   await applyFill(event);
@@ -167,10 +170,14 @@ const orderServiceImpl = {
     callback: grpc.sendUnaryData<any>
   ) {
     const { accountId, symbol, side, shares } = call.request;
+    const leverage = Math.min(5, Math.max(1, Number(call.request.leverage) || 1));
 
     // Validate inputs
     if (!symbol || !side || !shares || shares <= 0) {
       return callback(null, { success: false, error: "Invalid order parameters", status: "rejected" });
+    }
+    if (!["buy", "sell", "short", "cover"].includes(side)) {
+      return callback(null, { success: false, error: "Side must be 'buy', 'sell', 'short', or 'cover'", status: "rejected" });
     }
 
     const priceData = latestPrices.get(symbol);
@@ -178,31 +185,55 @@ const orderServiceImpl = {
       return callback(null, { success: false, error: `Unknown symbol: ${symbol}`, status: "rejected" });
     }
 
-    const fillPrice = side === "buy" ? priceData.ask : priceData.bid;
+    // Buying (long or covering a short) fills at the ask; selling (closing a
+    // long or opening a short) fills at the bid.
+    const fillPrice = side === "buy" || side === "cover" ? priceData.ask : priceData.bid;
 
     try {
       // Step 1: Validate with Account Service via gRPC
       if (side === "buy") {
         const totalCost = shares * fillPrice;
-        const balanceCheck = await checkBalance(accountId, totalCost);
+        const requiredCash = totalCost / leverage; // leverage reduces own-cash requirement
+        const balanceCheck = await checkBalance(accountId, requiredCash);
         if (!balanceCheck.sufficient) {
           return callback(null, {
             success: false,
-            error: `Insufficient cash. Need $${totalCost.toFixed(2)}, have $${balanceCheck.availableCash.toFixed(2)}`,
+            error: `Insufficient cash. Need $${requiredCash.toFixed(2)} at ${leverage}x, have $${balanceCheck.availableCash.toFixed(2)}`,
             status: "rejected",
           });
         }
       } else if (side === "sell") {
         const posCheck = await checkPosition(accountId, symbol, shares);
-        if (!posCheck.sufficient) {
+        if (!posCheck.sufficient || posCheck.heldShares < 0) {
           return callback(null, {
             success: false,
-            error: `Insufficient shares. Want to sell ${shares}, hold ${posCheck.heldShares}`,
+            error: `Insufficient long shares. Want to sell ${shares}, hold ${Math.max(0, posCheck.heldShares)}`,
             status: "rejected",
           });
         }
-      } else {
-        return callback(null, { success: false, error: "Side must be 'buy' or 'sell'", status: "rejected" });
+      } else if (side === "short") {
+        // Margin requirement gates how large a short can be opened; full
+        // proceeds are still credited (see Account Service for the accounting).
+        const proceeds = shares * fillPrice;
+        const requiredMargin = proceeds / leverage;
+        const balanceCheck = await checkBalance(accountId, requiredMargin);
+        if (!balanceCheck.sufficient) {
+          return callback(null, {
+            success: false,
+            error: `Insufficient margin. Need $${requiredMargin.toFixed(2)} at ${leverage}x, have $${balanceCheck.availableCash.toFixed(2)}`,
+            status: "rejected",
+          });
+        }
+      } else if (side === "cover") {
+        const posCheck = await checkPosition(accountId, symbol, shares);
+        const heldShort = posCheck.heldShares < 0 ? -posCheck.heldShares : 0;
+        if (heldShort < shares) {
+          return callback(null, {
+            success: false,
+            error: `Insufficient short position. Want to cover ${shares}, short ${heldShort}`,
+            status: "rejected",
+          });
+        }
       }
 
       // Step 2: Fill the order
@@ -230,9 +261,10 @@ const orderServiceImpl = {
         shares,
         fillPrice,
         timestamp,
+        leverage,
       });
 
-      console.log(`[Order Service] Order ${orderId}: ${side} ${shares} ${symbol} @ $${fillPrice.toFixed(2)} — FILLED`);
+      console.log(`[Order Service] Order ${orderId}: ${side} ${shares} ${symbol} @ $${fillPrice.toFixed(2)}${leverage > 1 ? ` (${leverage}x)` : ""} — FILLED`);
 
       callback(null, {
         success: true,

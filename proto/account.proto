@@ -43,11 +43,13 @@ message GetPortfolioRequest {
 
 message Position {
   string symbol = 1;
-  int32 shares = 2;
+  int32 shares = 2; // negative shares = short position
   double avg_cost = 3;
   double current_price = 4;
   double market_value = 5;
   double pnl = 6;
+  double margin_debt = 7; // cash borrowed against this position (leveraged longs only)
+  double leverage = 8; // most recent leverage used to open/add to this position
 }
 
 message Trade {
@@ -64,16 +66,18 @@ message GetPortfolioResponse {
   repeated Position positions = 2;
   double net_worth = 3;
   repeated Trade recent_trades = 4;
+  double total_margin_debt = 5;
 }
 
 message ApplyFillRequest {
   string account_id = 1;
   string order_id = 2;
   string symbol = 3;
-  string side = 4;
+  string side = 4; // "buy", "sell", "short", or "cover"
   int32 shares = 5;
   double fill_price = 6;
   int64 timestamp = 7;
+  double leverage = 8; // 1-5x, only meaningful for "buy" and "short"
 }
 
 message ApplyFillResponse {

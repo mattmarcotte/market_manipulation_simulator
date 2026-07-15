@@ -14,6 +14,18 @@ service AccountService {
 
   // Apply an order fill (deduct/add cash and shares)
   rpc ApplyFill (ApplyFillRequest) returns (ApplyFillResponse);
+
+  // Reset an account to its starting state (cash, positions, trade history)
+  rpc ResetAccount (ResetAccountRequest) returns (ResetAccountResponse);
+}
+
+message ResetAccountRequest {
+  string account_id = 1;
+}
+
+message ResetAccountResponse {
+  bool success = 1;
+  double cash = 2;
 }
 
 message CheckBalanceRequest {

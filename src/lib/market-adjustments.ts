@@ -1,4 +1,5 @@
 import { getMarketEngine } from "./market-engine";
+import { hasPost } from "./social-feed";
 
 export interface MarketAdjustment {
   symbol: string;
@@ -20,6 +21,13 @@ const listeners = (globalStore.__adjListeners ??= new Set<AdjustmentListener>())
 const recentAdjustments = (globalStore.__recentAdjustments ??= []);
 
 export function applyAdjustment(adjustment: MarketAdjustment) {
+  // Drop analyses that finish after their post was wiped (game restart) —
+  // otherwise an in-flight Gemini result would shock the fresh market.
+  if (adjustment.postId && !hasPost(adjustment.postId)) {
+    console.log(`[Market] Dropping stale adjustment for cleared post ${adjustment.postId}`);
+    return;
+  }
+
   recentAdjustments.unshift(adjustment);
   if (recentAdjustments.length > 100) recentAdjustments.pop();
 
@@ -37,6 +45,11 @@ export function applyAdjustment(adjustment: MarketAdjustment) {
 
 export function getRecentAdjustments(limit = 20): MarketAdjustment[] {
   return recentAdjustments.slice(0, limit);
+}
+
+/** Wipe adjustment history (game restart). */
+export function clearAdjustments() {
+  recentAdjustments.length = 0;
 }
 
 export function onAdjustment(listener: AdjustmentListener): () => void {

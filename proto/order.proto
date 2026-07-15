@@ -16,6 +16,11 @@ message PlaceOrderRequest {
   string side = 3; // "buy", "sell", "short", or "cover"
   int32 shares = 4;
   double leverage = 5; // 1-5x, only meaningful for "buy" and "short"; treat 0 as 1
+  // Live bid/ask from the display market (the Next.js streamer). When set,
+  // fills execute at these prices so the fill always matches what the player
+  // sees on screen; otherwise the order service falls back to its own engine.
+  double bid = 6;
+  double ask = 7;
 }
 
 message PlaceOrderResponse {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { placeOrder } from "@/lib/grpc-clients";
+import { getMarketStreamer } from "@/lib/market-streamer";
 
 const ACCOUNT_ID = "player-1";
 
@@ -19,6 +20,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Leverage only applies to 'buy' and 'short' orders" }, { status: 400 });
   }
 
+  // Forward the display market's live bid/ask so fills match the screen.
+  const tick = getMarketStreamer()
+    .getLatest()
+    .find((t) => t.symbol === symbol);
+  if (!tick) {
+    return NextResponse.json({ error: `Unknown symbol: ${symbol}` }, { status: 400 });
+  }
+
   try {
     const result = await placeOrder({
       accountId: ACCOUNT_ID,
@@ -26,6 +35,8 @@ export async function POST(req: NextRequest) {
       side,
       shares: Number(shares),
       leverage: lev,
+      bid: tick.bid,
+      ask: tick.ask,
     });
 
     if (!result.success) {

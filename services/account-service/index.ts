@@ -254,6 +254,17 @@ const accountServiceImpl = {
     callback(null, { success: true, cash: account.cash });
   },
 
+  resetAccount(
+    call: grpc.ServerUnaryCall<any, any>,
+    callback: grpc.sendUnaryData<any>
+  ) {
+    const { accountId } = call.request;
+    accounts.delete(accountId); // next getAccount() recreates with starting cash
+    processedOrders.clear();
+    console.log(`[Account Service] Reset account ${accountId} to starting state`);
+    callback(null, { success: true, cash: STARTING_CASH });
+  },
+
   getPortfolio(
     call: grpc.ServerUnaryCall<any, any>,
     callback: grpc.sendUnaryData<any>

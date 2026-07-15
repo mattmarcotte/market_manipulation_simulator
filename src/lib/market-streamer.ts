@@ -1,5 +1,6 @@
 import { getMarketEngine, PriceTick } from "./market-engine";
 import { AssetType, TICKERS, TickerConfig, TickerHolding } from "./tickers";
+import { GAME_DURATION_DAYS } from "./game";
 
 export interface Candle {
   time: number;
@@ -53,6 +54,10 @@ class MarketStreamer {
   private latestTicks: PriceTick[] = [];
   private engine = getMarketEngine();
 
+  // The simulation always begins paused — the player presses play to start
+  // their 2-year term. It also auto-pauses once the term is over.
+  private paused = true;
+
   private candleHistory: Map<string, Candle[]> = new Map();
 
   private indexBaseValue = 4000;
@@ -75,13 +80,56 @@ class MarketStreamer {
 
   start() {
     if (this.interval) return;
+
+    // Prime one snapshot so the market table shows prices while paused at the
+    // start of a term (day stays 0 until the player presses play).
+    if (!this.latestTicks.length) {
+      this.latestTicks = this.engine.snapshotTicks();
+    }
+
     this.interval = setInterval(() => {
+      if (this.paused) return;
+      if (this.engine.getDayNumber() >= GAME_DURATION_DAYS) {
+        this.paused = true; // term over — freeze the simulation
+        return;
+      }
       this.latestTicks = this.engine.tick();
       this.updateCandles(this.latestTicks);
       for (const listener of this.listeners) {
         listener(this.latestTicks);
       }
     }, TICK_INTERVAL_MS);
+  }
+
+  /** Full game reset: fresh prices at day 0, cleared history, paused. */
+  reset() {
+    this.engine.reset();
+    this.paused = true;
+    this.candleHistory.clear();
+    this.priceHistory.clear();
+    this.volumeHistory.clear();
+    this.indexBasePrices.clear();
+    this.indexHistory = [];
+    this.indexOpen = 0;
+    this.latestTicks = this.engine.snapshotTicks();
+    // Push one frame so connected clients see the reset immediately even
+    // though the simulation is paused.
+    for (const listener of this.listeners) {
+      listener(this.latestTicks);
+    }
+  }
+
+  setPaused(paused: boolean) {
+    // Never resume past the end of the player's term.
+    if (!paused && this.engine.getDayNumber() >= GAME_DURATION_DAYS) {
+      this.paused = true;
+      return;
+    }
+    this.paused = paused;
+  }
+
+  isPaused(): boolean {
+    return this.paused;
   }
 
   private updateCandles(ticks: PriceTick[]) {
@@ -214,8 +262,7 @@ class MarketStreamer {
 
   getLatest(): PriceTick[] {
     if (!this.latestTicks.length) {
-      this.latestTicks = this.engine.tick();
-      this.updateCandles(this.latestTicks);
+      this.latestTicks = this.engine.snapshotTicks();
     }
     return this.latestTicks;
   }

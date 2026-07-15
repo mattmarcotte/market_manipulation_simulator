@@ -17,6 +17,7 @@ export async function GET(): Promise<Response> {
             index: streamer.getIndex(),
             companies: streamer.getCompanyStats(),
             dayNumber: streamer.getDayNumber(),
+            paused: streamer.isPaused(),
           };
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify(payload)}\n\n`)

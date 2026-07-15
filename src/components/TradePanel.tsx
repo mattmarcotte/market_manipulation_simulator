@@ -48,7 +48,7 @@ export default function TradePanel({
 
   if (!tick) {
     return (
-      <div className="border border-gray-700 rounded-lg p-4 text-gray-500 text-center">
+      <div className="border border-gray-700 rounded-lg p-4 text-gray-500 text-center bg-gray-900">
         Select a ticker to trade
       </div>
     );
@@ -96,7 +96,7 @@ export default function TradePanel({
   };
 
   return (
-    <div className="border border-gray-700 rounded-lg p-4 space-y-4">
+    <div className="border border-gray-700 rounded-lg p-4 space-y-4 bg-gray-900">
       <div className="flex items-baseline justify-between">
         <div className="flex items-center gap-2">
           <h3 className="text-lg font-bold text-white">{tick.symbol}</h3>

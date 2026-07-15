@@ -22,7 +22,7 @@ export default function CompanyDetail({ company }: { company: CompanyStats }) {
   const isFund = company.assetType !== "stock";
 
   return (
-    <div className="border border-gray-700 rounded-lg p-4 space-y-3">
+    <div className="border border-gray-700 rounded-lg p-4 space-y-3 bg-gray-900">
       <div>
         <div className="flex items-baseline gap-2">
           <span className="text-sm">{assetIcon(company)}</span>

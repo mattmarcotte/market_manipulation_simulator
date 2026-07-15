@@ -102,6 +102,19 @@ export default function SocialFeed() {
       toastTimeouts.current.set(toastKey, timeout);
     });
 
+    es.addEventListener("reset", () => {
+      // Game restarted — wipe the whole feed and any pending state.
+      analyzeTimers.current.forEach((t) => clearTimeout(t));
+      analyzeTimers.current.clear();
+      toastTimeouts.current.forEach((t) => clearTimeout(t));
+      toastTimeouts.current.clear();
+      setPosts([]);
+      setAdjustments([]);
+      setToasts([]);
+      setAnalyzing(new Set());
+      setNoImpact(new Set());
+    });
+
     const timers = analyzeTimers.current;
     return () => {
       es.close();
@@ -146,7 +159,7 @@ export default function SocialFeed() {
   }
 
   return (
-    <div className="border border-gray-700 rounded-lg overflow-hidden flex flex-col">
+    <div className="flex flex-col h-full min-h-0 bg-black">
       {/* Impact toasts */}
       {toasts.length > 0 && (
         <div className="px-3 py-2 space-y-1 bg-gray-800/80 border-b border-gray-700">
@@ -168,9 +181,15 @@ export default function SocialFeed() {
         </div>
       )}
 
-      <div className="px-4 py-3 border-b border-gray-700">
-        <h2 className="text-sm font-bold text-white">Chirper</h2>
-        <p className="text-[10px] text-gray-500">Presidential Social Media</p>
+      <div className="px-4 py-2.5 border-b border-gray-800 flex items-center gap-2">
+        <span className="text-lg">🐦</span>
+        <div>
+          <h2 className="text-sm font-bold text-white leading-tight">Chirper</h2>
+          <p className="text-[9px] text-gray-500 leading-tight">For You · Following · Executive</p>
+        </div>
+        <span className="ml-auto text-[9px] text-[#d9a520] border border-[#d9a520] rounded-full px-2 py-0.5 font-bold">
+          POTUS ✓
+        </span>
       </div>
 
       {/* Compose */}
@@ -187,7 +206,7 @@ export default function SocialFeed() {
                 setCharCount(e.target.value.length);
               }}
               onKeyDown={handleKeyDown}
-              placeholder="What's happening, Mr. President?"
+              placeholder="Say something presidential..."
               className="w-full bg-transparent text-white text-sm resize-none outline-none placeholder-gray-600 min-h-[60px]"
               maxLength={280}
             />
@@ -208,7 +227,7 @@ export default function SocialFeed() {
       </div>
 
       {/* Feed */}
-      <div className="flex-1 overflow-y-auto max-h-[600px]">
+      <div className="flex-1 overflow-y-auto min-h-0">
         {posts.length === 0 ? (
           <div className="text-center text-gray-600 text-sm py-8">
             No chirps yet. Say something presidential.

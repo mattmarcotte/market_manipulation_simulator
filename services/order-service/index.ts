@@ -180,7 +180,13 @@ const orderServiceImpl = {
       return callback(null, { success: false, error: "Side must be 'buy', 'sell', 'short', or 'cover'", status: "rejected" });
     }
 
-    const priceData = latestPrices.get(symbol);
+    // Prefer the live bid/ask forwarded from the display market so fills match
+    // exactly what the player sees on screen (and freeze while paused). The
+    // local engine is only a fallback for direct gRPC callers.
+    const reqBid = Number(call.request.bid) || 0;
+    const reqAsk = Number(call.request.ask) || 0;
+    const priceData =
+      reqBid > 0 && reqAsk > 0 ? { bid: reqBid, ask: reqAsk } : latestPrices.get(symbol);
     if (!priceData) {
       return callback(null, { success: false, error: `Unknown symbol: ${symbol}`, status: "rejected" });
     }

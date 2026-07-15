@@ -1,4 +1,4 @@
-import { onNewPost } from "@/lib/social-feed";
+import { onFeedReset, onNewPost } from "@/lib/social-feed";
 import { onAdjustment } from "@/lib/market-adjustments";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +28,14 @@ export async function GET(): Promise<Response> {
         }
       });
 
+      const unsubReset = onFeedReset(() => {
+        try {
+          controller.enqueue(encoder.encode(`event: reset\ndata: {}\n\n`));
+        } catch {
+          unsubReset();
+        }
+      });
+
       const keepalive = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(": keepalive\n\n"));
@@ -35,6 +43,7 @@ export async function GET(): Promise<Response> {
           clearInterval(keepalive);
           unsubPost();
           unsubAdj();
+          unsubReset();
         }
       }, 15000);
     },

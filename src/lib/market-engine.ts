@@ -37,6 +37,13 @@ export class MarketEngine {
   private dayNumber = 0;
 
   constructor() {
+    this.reset();
+  }
+
+  /** Re-roll all prices from base configs and rewind the day counter to 0. */
+  reset() {
+    this.state.clear();
+    this.dayNumber = 0;
     for (const config of TICKERS) {
       const jitter = 1 + (Math.random() - 0.5) * 0.06;
       const price = +(config.basePrice * jitter).toFixed(2);
@@ -50,6 +57,29 @@ export class MarketEngine {
         prevClose: price,
       });
     }
+  }
+
+  /** Current prices as ticks WITHOUT advancing the simulation (for display while paused at day 0). */
+  snapshotTicks(): PriceTick[] {
+    const ticks: PriceTick[] = [];
+    for (const [symbol, s] of this.state) {
+      const spread = +(s.price * 0.0008).toFixed(2) || 0.01;
+      ticks.push({
+        symbol,
+        price: s.price,
+        change: 0,
+        changePercent: 0,
+        volume: s.volume,
+        bid: +(s.price - spread).toFixed(2),
+        ask: +(s.price + spread).toFixed(2),
+        high: s.high,
+        low: s.low,
+        open: s.open,
+        timestamp: Date.now(),
+        dayNumber: this.dayNumber,
+      });
+    }
+    return ticks;
   }
 
   tick(): PriceTick[] {

@@ -71,6 +71,7 @@ interface StreamPayload {
   index: MarketIndex;
   companies: CompanyStats[];
   dayNumber: number;
+  paused: boolean;
 }
 
 export function useMarketData() {
@@ -79,6 +80,7 @@ export function useMarketData() {
   const [index, setIndex] = useState<MarketIndex | null>(null);
   const [companies, setCompanies] = useState<CompanyStats[]>([]);
   const [dayNumber, setDayNumber] = useState(0);
+  const [paused, setPaused] = useState(true);
   const prevPrices = useRef<Map<string, number>>(new Map());
   const [flashes, setFlashes] = useState<Map<string, "up" | "down">>(new Map());
 
@@ -91,6 +93,7 @@ export function useMarketData() {
       setIndex(data.index);
       setCompanies(data.companies);
       setDayNumber(data.dayNumber);
+      if (typeof data.paused === "boolean") setPaused(data.paused);
 
       const newFlashes = new Map<string, "up" | "down">();
       for (const tick of data.ticks) {
@@ -108,7 +111,7 @@ export function useMarketData() {
     return () => es.close();
   }, []);
 
-  return { ticks, candles, index, companies, dayNumber, flashes };
+  return { ticks, candles, index, companies, dayNumber, paused, setPaused, flashes };
 }
 
 function formatMcap(b: number): string {
@@ -241,7 +244,7 @@ export default function MarketTicker({
     sortKey === key ? (sortDesc ? " ↓" : " ↑") : "";
 
   return (
-    <div className="space-y-0.5">
+    <div className="space-y-0.5 overflow-x-auto">
       {/* Tabs + search */}
       <div className="flex items-center gap-2 px-3 pb-2 flex-wrap">
         <div className="flex gap-1">
@@ -265,7 +268,7 @@ export default function MarketTicker({
         />
       </div>
 
-      <div className="grid grid-cols-[76px_1fr_72px_80px_72px_56px_64px_56px] gap-1.5 text-[10px] text-gray-500 px-3 py-1 font-mono uppercase">
+      <div className="grid grid-cols-[76px_1fr_72px_80px_72px_56px_64px_56px] min-w-[620px] gap-1.5 text-[10px] text-gray-500 px-3 py-1 font-mono uppercase">
         <button onClick={() => toggleSort("symbol")} className="text-left hover:text-gray-300">
           Symbol{sortArrow("symbol")}
         </button>
@@ -296,7 +299,7 @@ export default function MarketTicker({
           <button
             key={tick.symbol}
             onClick={() => onSelect(tick.symbol)}
-            className={`w-full grid grid-cols-[76px_1fr_72px_80px_72px_56px_64px_56px] gap-1.5 items-center text-xs px-3 py-1.5 rounded font-mono transition-colors
+            className={`w-full grid grid-cols-[76px_1fr_72px_80px_72px_56px_64px_56px] min-w-[620px] gap-1.5 items-center text-xs px-3 py-1.5 rounded font-mono transition-colors
               ${isSelected ? "bg-gray-700 ring-1 ring-blue-500" : "hover:bg-gray-800/70"}
               ${flash === "up" ? "!bg-green-900/40" : flash === "down" ? "!bg-red-900/40" : ""}`}
           >
@@ -306,15 +309,19 @@ export default function MarketTicker({
               </span>
               {tick.symbol}
             </span>
-            <div className="text-left truncate">
-              <span className="text-gray-300 text-[11px]">{co?.name ?? tick.symbol}</span>
-              <span className="text-gray-600 text-[9px] ml-1.5">{co?.sector}</span>
-              {co && (
-                <span className={`text-[9px] ml-1.5 font-bold ${ASSET_BADGES[co.assetType].cls}`}>
-                  {ASSET_BADGES[co.assetType].label}
-                  {co.leverage && Math.abs(co.leverage) > 1 ? ` ${co.leverage}x` : ""}
-                </span>
-              )}
+            <div className="text-left min-w-0">
+              <div className="text-gray-300 text-[11px] leading-tight truncate">
+                {co?.name ?? tick.symbol}
+              </div>
+              <div className="text-[9px] leading-tight truncate">
+                <span className="text-gray-600">{co?.sector}</span>
+                {co && (
+                  <span className={`ml-1.5 font-bold ${ASSET_BADGES[co.assetType].cls}`}>
+                    {ASSET_BADGES[co.assetType].label}
+                    {co.leverage && Math.abs(co.leverage) > 1 ? ` ${co.leverage}x` : ""}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex items-center justify-center">
               <Sparkline candles={tickCandles} width={64} height={24} />

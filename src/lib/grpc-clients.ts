@@ -36,6 +36,8 @@ export function placeOrder(request: {
   side: string;
   shares: number;
   leverage?: number;
+  bid?: number;
+  ask?: number;
 }): Promise<{
   success: boolean;
   orderId: string;
@@ -45,12 +47,21 @@ export function placeOrder(request: {
 }> {
   return new Promise((resolve, reject) => {
     getOrderClient().placeOrder(
-      { ...request, leverage: request.leverage || 1 },
+      { ...request, leverage: request.leverage || 1, bid: request.bid || 0, ask: request.ask || 0 },
       (err: any, res: any) => {
         if (err) reject(err);
         else resolve(res);
       }
     );
+  });
+}
+
+export function resetAccount(accountId: string): Promise<{ success: boolean; cash: number }> {
+  return new Promise((resolve, reject) => {
+    getAccountClient().resetAccount({ accountId }, (err: any, res: any) => {
+      if (err) reject(err);
+      else resolve(res);
+    });
   });
 }
 
